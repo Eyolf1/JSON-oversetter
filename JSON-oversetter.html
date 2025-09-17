@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+<meta charset="utf-8">
+<title>JSON-viser (offline)</title>
+<style>
+ :root{
+  /* Fargevariabler for LYSMODUS  */
+  --bg: #ffffff;
+  --text: #000000;
+  --border: #0066cc;
+  --accent: #d6336c;
+  --row-key: #444;
+  --success: #16a34a;
+  --error: #ef4444;
+  --warning: #f59e0b;
+}
+
+:root.dark{
+  /* Fargevariabler for DARKMODE  */
+  --bg: #1d1d1d;
+  --text: #e0e0e0;
+  --border: #3399ff;
+  --accent: #ff6b9c;
+  --row-key: #cccccc;
+  --success: #22c55e;
+  --error: #f87171;
+  --warning: #fbbf24;
+}
+
+/* Bruk variablene */
+body{
+  font-family: system-ui,sans-serif;
+  margin:2rem;
+  background: var(--bg);
+  color: var(--text);
+}
+
+textarea{
+  width:100%;
+  height:12rem;
+  background:var(--bg);
+  color:var(--text);
+  border:1px solid var(--border);
+  font-family: 'Cascadia Code', 'JetBrains Mono', monospace;
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  resize: vertical;
+}
+
+/* ---------- KNAPPER ---------- */
+button{
+  border:2px solid var(--border);
+  background:var(--bg);
+  color:var(--text);
+  font-weight:600;
+  font-size:1rem;
+  cursor:pointer;
+  transition:background .25s ease,color .25s ease,
+             border-color .25s ease,filter .25s ease;
+}
+
+/* Kvadratisk knapp med runde hjørner */
+.btnSquare{
+  --size:3rem;
+  width:var(--size);
+  height:var(--size);
+  padding:0;
+  border-radius:.45rem;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  margin-right:.5rem;
+  line-height:1;
+}
+.btnSquare:hover{filter:brightness(1.1);}
+
+/* Knappegruppe */
+.button-group {
+  display: flex;
+  gap: 0.5rem;
+  margin: 1rem 0;
+  align-items: center;
+}
+
+/* ---------- PANELER (summary + details) ---------- */
+#panels{
+  display:flex;
+  gap:1rem;
+  flex-wrap:wrap;
+}
+
+#summary, #details, #errors{
+  border:2px solid var(--border);
+  padding:1rem;
+  flex:1 1 18rem;
+  border-radius: 0.5rem;
+}
+
+#summary h2, #details h2, #errors h2{
+  margin-top:0;
+  color:var(--border)
+}
+
+#errors {
+  border-color: var(--error);
+  background: rgba(239, 68, 68, 0.05);
+}
+
+.dark #errors {
+  background: rgba(248, 113, 113, 0.1);
+}
+
+#errors h2 {
+  color: var(--error);
+}
+
+#detailsBox{
+  white-space:pre-wrap;
+  margin:0;
+  color:var(--text);
+}
+
+#summary .key{font-weight:600;color:var(--row-key)}
+#summary .val{color:var(--accent)}
+#summary .val.green  { color: var(--success);}
+#summary .val.orange { color: var(--warning);}
+#summary .val.blue   { color:#0ea5e9;}
+
+/* Produktliste styling */
+.product-list {
+  margin-top: 0.5rem;
+  padding-left: 1rem;
+}
+
+.product-item {
+  margin-bottom: 0.5rem;
+  padding: 0.5rem;
+  background: rgba(0, 102, 204, 0.05);
+  border-left: 3px solid var(--border);
+  border-radius: 0 0.25rem 0.25rem 0;
+}
+
+.dark .product-item {
+  background: rgba(51, 153, 255, 0.1);
+}
+
+.product-name {
+  font-weight: bold;
+  color: var(--accent);
+}
+
+.product-detail {
+  font-size: 0.9em;
+  color: var(--text);
+  opacity: 0.8;
+}
+
+/* Error styling */
+.error-content {
+  background: rgba(239, 68, 68, 0.1);
+  padding: 0.75rem;
+  border-left: 3px solid var(--error);
+  margin-top: 0.5rem;
+  white-space: pre-line;
+  border-radius: 0 0.25rem 0.25rem 0;
+}
+
+.dark .error-content {
+  background: rgba(248, 113, 113, 0.15);
+}
+
+/* JSON tree visning */
+#output {
+  margin-top: 2rem;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.02);
+  border-radius: 0.5rem;
+  font-family: 'Cascadia Code', 'JetBrains Mono', monospace;
+  font-size: 0.9em;
+}
+
+.dark #output {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+#output .key {
+  color: var(--border);
+  font-weight: bold;
+}
+
+#output .obj {
+  margin-left: 1rem;
+  padding-left: 1rem;
+  border-left: 1px solid rgba(0, 102, 204, 0.2);
+}
+
+/* Status badge */
+.status-badge {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin-top: 0.5rem;
+}
+
+.status-success {
+  background: var(--success);
+  color: white;
+}
+
+.status-error {
+  background: var(--error);
+  color: white;
+}
+
+/* Copy button */
+.copy-btn {
+  float: right;
+  font-size: 0.875rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: 0.25rem;
+  background: var(--border);
+  color: white;
+  border: none;
+  cursor: pointer;
+}
+
+.copy-btn:hover {
+  filter: brightness(1.1);
+}
+
+/* Loading state */
+.loading {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+/* Tooltip */
+.tooltip {
+  position: relative;
+  display: inline-block;
+}
+
+.tooltip .tooltiptext {
+  visibility: hidden;
+  background-color: var(--text);
+  color: var(--bg);
+  text-align: center;
+  border-radius: 6px;
+  padding: 5px 10px;
+  position: absolute;
+  z-index: 1;
+  bottom: 125%;
+  left: 50%;
+  margin-left: -60px;
+  font-size: 0.875rem;
+}
+
+.tooltip:hover .tooltiptext {
+  visibility: visible;
+}
+
+/* Responsiv design */
+@media (max-width: 768px) {
+  body {
+    margin: 1rem;
+  }
+  
+  #panels {
+    flex-direction: column;
+  }
+  
+  .button-group {
+    flex-wrap: wrap;
+  }
+}
+
+</style>
+</head>
+<body>
+<h1>Lim inn e-post eller JSON → se struktur</h1>
+
+<textarea id="input"
+          placeholder="Lim inn hele feilmeldingen (e-post) eller ren JSON her …">
+</textarea>
+
+<div class="button-group">
+  <button onclick="render()" class="btnSquare" title="Vis data">👁️</button>
+  <button onclick="clearAll()" class="btnSquare" title="Tøm alt">🗑️</button>
+  <button onclick="copyJSON()" class="btnSquare" title="Kopier JSON">📋</button>
+  <button onclick="formatJSON()" class="btnSquare" title="Formater JSON">✨</button>
+  <button onclick="copyPhone()" class="btnSquare" title="Kopier telefonnummer">📞</button>
+  <button id="themeToggle" onclick="toggleTheme()" class="btnSquare" title="Bytt tema">🌙</button>
+</div>
+
+<!-- === P A N E L S  (summary + details + errors) ================================= -->
+<div id="panels">
+  <!-- SAMMENDRAGET -->
+  <div id="summary" style="display:none">
+    <h2>📝 Viktige felter</h2>
+    <div id="summaryRows"></div>
+  </div>
+
+  <!-- EKSTRA INFO FRA E-POST -->
+  <div id="details" style="display:none">
+    <h2>📦 Bestillingsinfo</h2>
+    <div id="detailsBox">(ingen tekst funnet)</div>
+  </div>
+  
+  <!-- FEILMELDINGER -->
+  <div id="errors" style="display:none">
+    <h2>⚠️ Feilmeldinger</h2>
+    <div id="errorsBox"></div>
+  </div>
+</div>
+
+<!-- LOGG GENERATOR -->
+<div id="logGenerator" style="display:none; margin-top: 1rem;">
+  <div style="border: 2px solid var(--border); padding: 1rem; border-radius: 0.5rem;">
+    <h2 style="margin-top: 0; color: var(--border);">📝 Generer logg til sak</h2>
+    
+    <div style="margin-bottom: 1rem;">
+      <label for="registeredDate" style="font-weight: 600;">Registrert på dato:</label>
+      <input type="date" id="registeredDate" style="
+        margin-left: 0.5rem;
+        padding: 0.25rem 0.5rem;
+        background: var(--bg);
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-radius: 0.25rem;
+      ">
+    </div>
+    
+    <div style="margin-bottom: 1rem;">
+      <label for="additionalNotes" style="font-weight: 600;">Tilleggskommentar (valgfri):</label>
+      <input type="text" id="additionalNotes" placeholder="F.eks. 'Kunde har fått bekreftelse på SMS'" style="
+        display: block;
+        width: 100%;
+        margin-top: 0.5rem;
+        padding: 0.5rem;
+        background: var(--bg);
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-radius: 0.25rem;
+      ">
+    </div>
+    
+    <div style="background: rgba(0, 102, 204, 0.05); padding: 1rem; border-radius: 0.25rem; margin-bottom: 1rem;">
+      <div style="font-weight: 600; margin-bottom: 0.5rem;">Generert logg:</div>
+      <div id="generatedLog" style="
+        font-family: 'Cascadia Code', 'JetBrains Mono', monospace;
+        white-space: pre-wrap;
+        background: var(--bg);
+        padding: 0.75rem;
+        border: 1px solid var(--border);
+        border-radius: 0.25rem;
+        margin-top: 0.5rem;
+      ">//IPTV PRIO - Venter på data...</div>
+    </div>
+    
+    <button onclick="copyLog()" style="
+      padding: 0.5rem 1rem;
+      background: var(--border);
+      color: white;
+      border: none;
+      border-radius: 0.25rem;
+      font-weight: 600;
+      cursor: pointer;
+    ">📋 Kopier logg</button>
+  </div>
+</div>
+
+<!-- JSON-treet -->
+<div id="output" style="display:none"></div>
+
+<script>
+/* -------------  KONFIGURASJON ------------- */
+const KEY_I18N={
+  ProfileTemplateKey:"Malmønøkkel",Agreement:"Avtale",ChargePeriod:"Fakturerings­periode",
+  ContractPeriod:"Kontraktslengde",ContractStartDate:"Startdato",
+  Customer:"Kunde",BirthDate:"Fødselsdato",ExternalReference:"Kundenummer",
+  DefaultAddress:"Primæradresse",Street:"Gate",HouseNumberAlpha:"Hus-bokstav",
+  HouseNumberNumeric:"Husnr",MiddleName:"Mellomnavn",PostalCode:"Postnr",
+  SmallCity:"Bydel",BigCity:"Poststed",Surname:"Etternavn",
+  FirstName:"Fornavn",Email:"E-post",MobilePhone:"Mobil",
+  ProductWithOffers:"Produkter",ActivationDate:"Aktiveringsdato",OrderId:"Ordre-ID",
+  ProductKey:"Produktnøkkel",ProductName:"Produktnavn",OfferKey:"Tilbudsnøkkel",
+  OfferName:"Tilbudsnavn",Price:"Pris",Currency:"Valuta",Quantity:"Antall",
+  Status:"Status",ErrorCode:"Feilkode",ErrorMessage:"Feilmelding"
+};
+  
+const FIELD_COLOR = {
+  Surname:            "green",
+  FirstName:          "green",
+  BirthDate:          "orange",
+  Street:             "blue",
+  PostalCode:         "blue",
+  HouseNumberNumeric: "blue",
+  HouseNumberAlpha:   "blue",
+  ExternalReference:  "orange"
+};
+
+const SUMMARY_PATHS=[
+  ["Customer.ExternalReference","ExternalReference"],
+  ["Customer.DefaultAddress.FirstName","FirstName"],
+  ["Customer.DefaultAddress.Surname","Surname"],
+  ["Customer.BirthDate","BirthDate"],
+  ["Customer.DefaultAddress.Street","Street"],
+  ["Customer.DefaultAddress.HouseNumberNumeric","HouseNumberNumeric"],
+  ["Customer.DefaultAddress.HouseNumberAlpha","HouseNumberAlpha"],
+  ["Customer.DefaultAddress.PostalCode","PostalCode"],
+  ["Customer.DefaultAddress.BigCity","BigCity"],
+  ["Customer.DefaultAddress.SmallCity","SmallCity"],
+  ["Customer.DefaultAddress.Email","Email"],
+  ["Customer.DefaultAddress.MobilePhone","MobilePhone"],
+  ["Customer.DefaultAddress.MiddleName","MiddleName"],
+  ["CartOptions.ActivationDate","ActivationDate"],
+  ["OrderId","OrderId"]
+];
+
+/* ------------------------------------------ */
+
+/* Hent verdi gitt en sti "Customer.BirthDate" */
+function getByPath(obj,path){
+  return path.split('.').reduce((o,k)=>o&&o[k],obj);
+}
+
+/* Bygg tre-visningen rekursivt */
+function htmlFor(v, indent = 0){
+  if(Array.isArray(v)) {
+    if (v.length === 0) return '<span style="color: #999">[]</span>';
+    return '<div class="arr">[' + v.map(item => htmlFor(item, indent + 1)).join(', ') + ']</div>';
+  }
+  if(v !== null && typeof v === 'object'){
+    const entries = Object.entries(v);
+    if (entries.length === 0) return '<span style="color: #999">{}</span>';
+    return '<div class="obj">{' + entries.map(
+      ([k,val]) => `<div><span class="key">${KEY_I18N[k] || k}</span>: ${htmlFor(val, indent + 1)}</div>`
+    ).join('') + '}</div>';
+  }
+  if (v === null) return '<span style="color: #999">null</span>';
+  if (v === undefined) return '<span style="color: #999">undefined</span>';
+  if (typeof v === 'string' && v === '') return '<span style="color: #999">""</span>';
+  return `<span>${String(v)}</span>`;
+}
+
+/* ----------  HJELPEFUNKSJONER  ---------- */
+function extractJSON(str){
+  const first = str.indexOf('{');
+  const last  = str.lastIndexOf('}');
+  if (first === -1 || last === -1 || last <= first) return null;
+  const cand = str.slice(first, last + 1);
+  try { JSON.parse(cand); return cand; } catch{ return null; }
+}
+
+function parseEmailHeader(str) {
+  const lines = str.split('\n');
+  const headerInfo = {};
+  
+  for (const line of lines) {
+    // Stopp når vi når JSON-delen
+    if (line.trim().startsWith('{')) break;
+    
+    // Parse Business Unit
+    const buMatch = line.match(/Business Unit:\s*\[(\d+)\]\s*(.*?)(?:;|$)/i);
+    if (buMatch) {
+      headerInfo.businessUnit = `[${buMatch[1]}] ${buMatch[2]}`;
+    }
+    
+    // Parse External Reference
+    const extRefMatch = line.match(/External Reference:\s*(\d+)/i);
+    if (extRefMatch) {
+      headerInfo.externalReference = extRefMatch[1];
+    }
+    
+    // Parse Product
+    const productMatch = line.match(/Product:\s*\[(\d+)\]\s*(.*?)(?:,|$)/i);
+    if (productMatch) {
+      headerInfo.product = `[${productMatch[1]}] ${productMatch[2]}`;
+    }
+    
+    // Parse Offer
+    const offerMatch = line.match(/Offer:\s*\[(\d+)\]\s*(.*?)(?:,|$)/i);
+    if (offerMatch) {
+      headerInfo.offer = `[${offerMatch[1]}] ${offerMatch[2]}`;
+    }
+    
+    // Parse Contract Period
+    const contractMatch = line.match(/ContractPeriod:\s*(\w+)/i);
+    if (contractMatch) {
+      headerInfo.contractPeriod = contractMatch[1];
+    }
+    
+    // Parse Errors section
+    if (line.match(/Errors:/i)) {
+      const errorsIndex = str.indexOf(line);
+      const errorsSection = str.slice(errorsIndex);
+      const failedMatch = errorsSection.match(/Errors:[\s\S]*?(?=Failed request:|$)/i);
+      if (failedMatch) {
+        headerInfo.errors = failedMatch[0].replace(/Errors:\s*-+\s*/i, '').trim();
+      }
+    }
+  }
+  
+  return headerInfo;
+}
+
+/* Format JSON pent */
+function formatJSON() {
+  const input = document.getElementById('input');
+  const jsonStr = extractJSON(input.value);
+  
+  if (!jsonStr) {
+    alert('Ingen gyldig JSON funnet!');
+    return;
+  }
+  
+  try {
+    const data = JSON.parse(jsonStr);
+    input.value = JSON.stringify(data, null, 2);
+  } catch(e) {
+    alert('Kunne ikke formatere JSON: ' + e.message);
+  }
+}
+
+/* Kopier JSON til clipboard */
+function copyJSON() {
+  const jsonStr = extractJSON(document.getElementById('input').value);
+  
+  if (!jsonStr) {
+    alert('Ingen JSON å kopiere!');
+    return;
+  }
+  
+  navigator.clipboard.writeText(jsonStr).then(() => {
+    // Vis visuell tilbakemelding
+    const btn = event.target;
+    const originalText = btn.textContent;
+    btn.textContent = '✅';
+    setTimeout(() => {
+      btn.textContent = originalText;
+    }, 1500);
+  }).catch(() => {
+    alert('Kunne ikke kopiere til utklippstavlen');
+  });
+}
+
+/* Tøm alt */
+function clearAll() {
+  if (confirm('Er du sikker på at du vil tømme alt innhold?')) {
+    document.getElementById('input').value = '';
+    document.getElementById('output').innerHTML = '';
+    document.getElementById('output').style.display = 'none';
+    document.getElementById('summary').style.display = 'none';
+    document.getElementById('details').style.display = 'none';
+    document.getElementById('errors').style.display = 'none';
+  }
+}
+
+/* Hovedfunksjon – kalles når du trykker «Vis» */
+function render(){
+  const raw = document.getElementById('input').value.trim();
+  const out = document.getElementById('output');
+  const sumBox = document.getElementById('summary');
+  const rows = document.getElementById('summaryRows');
+  const detailsBox = document.getElementById('details');
+  const detailsContent = document.getElementById('detailsBox');
+  const errorsBox = document.getElementById('errors');
+  const errorsContent = document.getElementById('errorsBox');
+  const logGen = document.getElementById('logGenerator');
+
+  // Reset alt
+  out.innerHTML = ''; 
+  rows.innerHTML = ''; 
+  errorsContent.innerHTML = '';
+  sumBox.style.display = 'none'; 
+  detailsBox.style.display = 'none';
+  errorsBox.style.display = 'none';
+  out.style.display = 'none';
+  logGen.style.display = 'none';
+
+  if (!raw) {
+    alert('Vennligst lim inn noe tekst først!');
+    return;
+  }
+
+  // Parse e-post header
+  const emailHeader = parseEmailHeader(raw);
+  
+  // Vis feilmeldinger separat hvis de finnes
+  if (emailHeader.errors) {
+    errorsContent.innerHTML = `<div class="error-content">${emailHeader.errors}</div>`;
+    errorsBox.style.display = 'block';
+    delete emailHeader.errors; // Fjern fra header for å ikke vise dobbelt
+  }
+  
+  // Vis header info
+  if (Object.keys(emailHeader).length > 0) {
+    let headerHtml = '';
+    
+    if (emailHeader.businessUnit) {
+      headerHtml += `<div><strong>Business Unit:</strong> ${emailHeader.businessUnit}</div>`;
+    }
+    if (emailHeader.externalReference) {
+      headerHtml += `<div><strong>Kundenummer:</strong> <span style="color: var(--accent); font-weight: bold; font-size: 1.1em;">${emailHeader.externalReference}</span> 
+        <span class="tooltip">
+          <span style="cursor: help;">ℹ️</span>
+          <span class="tooltiptext">Dette er kundens unike ID</span>
+        </span>
+      </div>`;
+    }
+    if (emailHeader.product) {
+      headerHtml += `<div><strong>Produkt (fra header):</strong> ${emailHeader.product}</div>`;
+    }
+    if (emailHeader.offer) {
+      headerHtml += `<div><strong>Tilbud (fra header):</strong> ${emailHeader.offer}</div>`;
+    }
+    if (emailHeader.contractPeriod) {
+      headerHtml += `<div><strong>Kontraktsperiode:</strong> ${emailHeader.contractPeriod}</div>`;
+    }
+    
+    // Prøv å finne og vise produkter fra JSON
+    try {
+      const jsonStr = extractJSON(raw);
+      if (jsonStr) {
+        const data = JSON.parse(jsonStr);
+        
+        // Lagre data globalt for logg-generering
+        window.currentOrderData = data;
+        window.currentEmailHeader = emailHeader;
+        
+        // Vis logg-generator
+        logGen.style.display = 'block';
+        generateLog(); // Generer initial logg
+        
+        // Sjekk status
+        const status = data.Status || data.status;
+        if (status) {
+          headerHtml += `<div style="margin-top: 1rem;">`;
+          if (status.toLowerCase() === 'success' || status.toLowerCase() === 'ok') {
+            headerHtml += `<span class="status-badge status-success">✅ ${status}</span>`;
+          } else {
+            headerHtml += `<span class="status-badge status-error">❌ ${status}</span>`;
+          }
+          headerHtml += `</div>`;
+        }
+        
+        // Vis produkter
+        const products = getByPath(data, 'ProductWithOffers');
+        
+        if (products && Array.isArray(products) && products.length > 0) {
+          headerHtml += '<div style="margin-top: 1rem;"><strong>📦 Alle produkter i bestillingen:</strong>';
+          headerHtml += `<div style="font-size: 0.9em; color: var(--text); opacity: 0.7;">(${products.length} produkt${products.length > 1 ? 'er' : ''})</div>`;
+          headerHtml += '<div class="product-list">';
+          
+          products.forEach((product, index) => {
+            headerHtml += '<div class="product-item">';
+            headerHtml += `<div class="product-name">📌 ${product.ProductName || 'Ukjent produkt'}</div>`;
+            
+            // Vis produktdetaljer
+            if (product.ProductKey) {
+              headerHtml += `<div class="product-detail">Nøkkel: <code>${product.ProductKey}</code></div>`;
+            }
+            
+            // Vis pris hvis den finnes
+            if (product.Price !== undefined) {
+              headerHtml += `<div class="product-detail">💰 Pris: ${product.Price} ${product.Currency || 'NOK'}</div>`;
+            }
+            
+            // Vis tilbud hvis de finnes
+            if (product.Offers && Array.isArray(product.Offers) && product.Offers.length > 0) {
+              headerHtml += '<div class="product-detail" style="margin-top: 0.5rem;"><strong>Tilbud:</strong></div>';
+              product.Offers.forEach(offer => {
+                if (offer.OfferName || offer.OfferKey) {
+                  headerHtml += `<div class="product-detail" style="margin-left: 1rem;">
+                    🎁 ${offer.OfferName || 'Ukjent tilbud'} 
+                    ${offer.OfferKey ? `<code>[${offer.OfferKey}]</code>` : ''}
+                    ${offer.Price ? ` - ${offer.Price} ${offer.Currency || 'NOK'}` : ''}
+                  </div>`;
+                }
+              });
+            }
+            
+            headerHtml += '</div>';
+          });
+          
+          headerHtml += '</div></div>';
+        }
+        
+        // Sjekk for feilmeldinger i JSON også
+        if (data.ErrorMessage || data.errorMessage || data.error) {
+          const errorMsg = data.ErrorMessage || data.errorMessage || data.error;
+          errorsContent.innerHTML += `<div class="error-content">Fra JSON: ${errorMsg}</div>`;
+          errorsBox.style.display = 'block';
+        }
+      }
+    } catch(e) {
+      console.error('Feil ved parsing av produkter:', e);
+    }
+    
+    detailsContent.innerHTML = headerHtml;
+    detailsBox.style.display = 'block';
+  }
+
+  // Parse og vis JSON
+  const jsonStr = extractJSON(raw);
+  if (!jsonStr) {
+    errorsContent.innerHTML = '<div class="error-content">⚠️ Ingen gyldig JSON funnet i teksten.</div>';
+    errorsBox.style.display = 'block';
+    return;
+  }
+
+  try {
+    const data = JSON.parse(jsonStr);
+
+    /* --- Bygg sammendraget --- */
+    let found = false;
+
+    SUMMARY_PATHS.forEach(([path, origKey]) => {
+      const val = getByPath(data, path);
+
+      // Vis feltet kun hvis det har verdi
+      if (val !== undefined && val !== null && val !== '') {
+        found = true;
+
+        let displayVal = val;
+
+        // Formatér fødselsdato
+        if (origKey === 'BirthDate' || origKey === 'ActivationDate') {
+          const d = new Date(val);
+          if (!isNaN(d)) {
+            displayVal = d.toLocaleDateString('no-NO');
+          }
+        }
+        
+        // Fremhev viktige felter
+        const isImportant = ['ExternalReference', 'OrderId'].includes(origKey);
+
+        rows.insertAdjacentHTML(
+          'beforeend',
+          `<div class="row">
+             <span class="key">${KEY_I18N[origKey] || origKey}:</span>
+             <span class="val ${FIELD_COLOR[origKey] || ''}" 
+                   ${isImportant ? 'style="font-weight: bold; font-size: 1.1em;"' : ''}>
+               ${displayVal}
+             </span>
+           </div>`
+        );
+      }
+    });
+
+    if (found) sumBox.style.display = 'block';
+
+    /* --- Bygg hele JSON-treet --- */
+    out.innerHTML = '<h3>📊 Full JSON-struktur:</h3>' + htmlFor(data);
+    out.style.display = 'block';
+
+  } catch(e) {
+    errorsContent.innerHTML = `<div class="error-content">❌ Kunne ikke tolke JSON: ${e.message}</div>`;
+    errorsBox.style.display = 'block';
+  }
+}
+
+function copyPhone() {
+  if (!window.currentOrderData) {
+    alert('Ingen data å hente telefonnummer fra!');
+    return;
+  }
+  
+  const data = window.currentOrderData;
+  const phone = getByPath(data, 'Customer.DefaultAddress.MobilePhone');
+  
+  if (!phone) {
+    alert('Ingen telefonnummer funnet i dataene!');
+    return;
+  }
+  
+  navigator.clipboard.writeText(phone).then(() => {
+    // Vis visuell tilbakemelding
+    const btn = event.target;
+    const originalText = btn.textContent;
+    btn.textContent = '✅';
+    setTimeout(() => {
+      btn.textContent = originalText;
+    }, 1500);
+  }).catch(() => {
+    alert('Kunne ikke kopiere til utklippstavlen');
+  });
+}
+
+
+/* ---------- DARK-MODE ---------- */
+function setTheme(dark){
+  document.documentElement.classList.toggle('dark', dark);
+  localStorage.setItem('theme', dark ? 'dark' : 'light');
+  document.getElementById('themeToggle').textContent = dark ? '☀️' : '🌙';
+  document.getElementById('themeToggle').title = dark ? 'Bytt til lys modus' : 'Bytt til mørk modus';
+}
+
+function toggleTheme(){
+  setTheme(!document.documentElement.classList.contains('dark'));
+}
+
+/* ---------- LOGG GENERATOR ---------- */
+function generateLog() {
+  if (!window.currentOrderData) return;
+  
+  const data = window.currentOrderData;
+  const header = window.currentEmailHeader || {};
+  
+  // Hent verdier
+  const registeredDate = document.getElementById('registeredDate').value;
+  const additionalNotes = document.getElementById('additionalNotes').value;
+  
+  // Hent kundeinfo - kun kundenummer, ikke navn
+  const externalRef = getByPath(data, 'Customer.ExternalReference') || header.externalReference || 'UKJENT';
+  
+  // Hent produkter
+  const products = getByPath(data, 'ProductWithOffers') || [];
+  let productList = products.map(p => p.ProductName || 'Ukjent produkt').join(', ');
+  if (!productList) productList = 'Ingen produkter';
+  
+  // Bygg logg-tekst
+  let logText = `//IPTV PRIO\n`;
+  logText += `Kunde: ${externalRef}\n`;
+  logText += `Produkter: ${productList}\n`;
+  
+  // Legg til produkt fra header hvis det finnes
+  if (header.product) {
+    logText += `Produkt: ${header.product}\n`;
+  }
+  
+  // Legg til tilbud fra header hvis det finnes
+  if (header.offer) {
+    logText += `Tilbud: ${header.offer}\n`;
+  }
+  
+  if (registeredDate) {
+    const d = new Date(registeredDate);
+    const formatted = d.toLocaleDateString('no-NO');
+    logText += `Registrert på: ${formatted}\n`;
+  } else {
+    logText += `Registrert på: [DATO IKKE ANGITT]\n`;
+  }
+  
+  // Legg til status hvis den finnes
+  const status = data.Status || data.status;
+  if (status) {
+    logText += `Status: ${status}\n`;
+  }
+  
+  // Legg til tilleggskommentar hvis fylt ut
+  if (additionalNotes) {
+    logText += `\nKommentar: ${additionalNotes}\n`;
+  }
+  
+  // Oppdater visningen
+  document.getElementById('generatedLog').textContent = logText;
+}
+
+function copyLog() {
+  const logText = document.getElementById('generatedLog').textContent;
+  
+  if (logText.includes('Venter på data')) {
+    alert('Ingen logg å kopiere ennå!');
+    return;
+  }
+  
+  navigator.clipboard.writeText(logText).then(() => {
+    // Vis visuell tilbakemelding
+    const btn = event.target;
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '✅ Kopiert!';
+    btn.style.background = 'var(--success)';
+    setTimeout(() => {
+      btn.innerHTML = originalText;
+      btn.style.background = 'var(--border)';
+    }, 2000);
+  }).catch(() => {
+    alert('Kunne ikke kopiere til utklippstavlen');
+  });
+}
+
+// Lytt til endringer i feltene
+document.addEventListener('DOMContentLoaded', function() {
+  // Sett dagens dato som standard
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('registeredDate').value = today;
+  
+  // Oppdater logg når feltene endres
+  document.getElementById('registeredDate').addEventListener('change', generateLog);
+  document.getElementById('additionalNotes').addEventListener('input', generateLog);
+});
+
+/* Keyboard shortcuts */
+document.addEventListener('keydown', function(e) {
+  // Ctrl/Cmd + Enter = Vis
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+    e.preventDefault();
+    render();
+  }
+  // Ctrl/Cmd + Shift + F = Formater
+  if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'F') {
+    e.preventDefault();
+    formatJSON();
+  }
+  // Ctrl/Cmd + Shift + C = Kopier
+  if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'C') {
+    e.preventDefault();
+    copyJSON();
+  }
+  // Ctrl/Cmd + L = Kopier logg
+  if ((e.ctrlKey || e.metaKey) && e.key === 'l') {
+    e.preventDefault();
+    if (document.getElementById('logGenerator').style.display !== 'none') {
+      copyLog();
+    }
+  }
+});
+
+/* Init - bruk lagret preferanse eller system */
+(function(){
+  const saved = localStorage.getItem('theme');
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  setTheme(saved ? saved === 'dark' : prefersDark);
+  
+  // Auto-fokus på tekstfeltet
+  document.getElementById('input').focus();
+})();
+</script>
+</body>
+</html>
