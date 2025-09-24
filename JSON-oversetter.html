@@ -572,14 +572,16 @@ function render(){
   const logGen = document.getElementById('logGenerator');
 
   // Reset alt
-  out.innerHTML = ''; 
-  rows.innerHTML = ''; 
+  out.innerHTML = '';
+  rows.innerHTML = '';
   errorsContent.innerHTML = '';
-  sumBox.style.display = 'none'; 
+  sumBox.style.display = 'none';
   detailsBox.style.display = 'none';
   errorsBox.style.display = 'none';
   out.style.display = 'none';
   logGen.style.display = 'none';
+  window.currentOrderData = null;
+  window.currentEmailHeader = null;
 
   if (!raw) {
     alert('Vennligst lim inn noe tekst først!');
@@ -588,123 +590,14 @@ function render(){
 
   // Parse e-post header
   const emailHeader = parseEmailHeader(raw);
-  
+
   // Vis feilmeldinger separat hvis de finnes
   if (emailHeader.errors) {
     errorsContent.innerHTML = `<div class="error-content">${emailHeader.errors}</div>`;
     errorsBox.style.display = 'block';
     delete emailHeader.errors; // Fjern fra header for å ikke vise dobbelt
   }
-  
-  // Vis header info
-  if (Object.keys(emailHeader).length > 0) {
-    let headerHtml = '';
-    
-    if (emailHeader.businessUnit) {
-      headerHtml += `<div><strong>Business Unit:</strong> ${emailHeader.businessUnit}</div>`;
-    }
-    if (emailHeader.externalReference) {
-      headerHtml += `<div><strong>Kundenummer:</strong> <span style="color: var(--accent); font-weight: bold; font-size: 1.1em;">${emailHeader.externalReference}</span> 
-        <span class="tooltip">
-          <span style="cursor: help;">ℹ️</span>
-          <span class="tooltiptext">Dette er kundens unike ID</span>
-        </span>
-      </div>`;
-    }
-    if (emailHeader.product) {
-      headerHtml += `<div><strong>Produkt (fra header):</strong> ${emailHeader.product}</div>`;
-    }
-    if (emailHeader.offer) {
-      headerHtml += `<div><strong>Tilbud (fra header):</strong> ${emailHeader.offer}</div>`;
-    }
-    if (emailHeader.contractPeriod) {
-      headerHtml += `<div><strong>Kontraktsperiode:</strong> ${emailHeader.contractPeriod}</div>`;
-    }
-    
-    // Prøv å finne og vise produkter fra JSON
-    try {
-      const jsonStr = extractJSON(raw);
-      if (jsonStr) {
-        const data = JSON.parse(jsonStr);
-        
-        // Lagre data globalt for logg-generering
-        window.currentOrderData = data;
-        window.currentEmailHeader = emailHeader;
-        
-        // Vis logg-generator
-        logGen.style.display = 'block';
-        generateLog(); // Generer initial logg
-        
-        // Sjekk status
-        const status = data.Status || data.status;
-        if (status) {
-          headerHtml += `<div style="margin-top: 1rem;">`;
-          if (status.toLowerCase() === 'success' || status.toLowerCase() === 'ok') {
-            headerHtml += `<span class="status-badge status-success">✅ ${status}</span>`;
-          } else {
-            headerHtml += `<span class="status-badge status-error">❌ ${status}</span>`;
-          }
-          headerHtml += `</div>`;
-        }
-        
-        // Vis produkter
-        const products = getByPath(data, 'ProductWithOffers');
-        
-        if (products && Array.isArray(products) && products.length > 0) {
-          headerHtml += '<div style="margin-top: 1rem;"><strong>📦 Alle produkter i bestillingen:</strong>';
-          headerHtml += `<div style="font-size: 0.9em; color: var(--text); opacity: 0.7;">(${products.length} produkt${products.length > 1 ? 'er' : ''})</div>`;
-          headerHtml += '<div class="product-list">';
-          
-          products.forEach((product, index) => {
-            headerHtml += '<div class="product-item">';
-            headerHtml += `<div class="product-name">📌 ${product.ProductName || 'Ukjent produkt'}</div>`;
-            
-            // Vis produktdetaljer
-            if (product.ProductKey) {
-              headerHtml += `<div class="product-detail">Nøkkel: <code>${product.ProductKey}</code></div>`;
-            }
-            
-            // Vis pris hvis den finnes
-            if (product.Price !== undefined) {
-              headerHtml += `<div class="product-detail">💰 Pris: ${product.Price} ${product.Currency || 'NOK'}</div>`;
-            }
-            
-            // Vis tilbud hvis de finnes
-            if (product.Offers && Array.isArray(product.Offers) && product.Offers.length > 0) {
-              headerHtml += '<div class="product-detail" style="margin-top: 0.5rem;"><strong>Tilbud:</strong></div>';
-              product.Offers.forEach(offer => {
-                if (offer.OfferName || offer.OfferKey) {
-                  headerHtml += `<div class="product-detail" style="margin-left: 1rem;">
-                    🎁 ${offer.OfferName || 'Ukjent tilbud'} 
-                    ${offer.OfferKey ? `<code>[${offer.OfferKey}]</code>` : ''}
-                    ${offer.Price ? ` - ${offer.Price} ${offer.Currency || 'NOK'}` : ''}
-                  </div>`;
-                }
-              });
-            }
-            
-            headerHtml += '</div>';
-          });
-          
-          headerHtml += '</div></div>';
-        }
-        
-        // Sjekk for feilmeldinger i JSON også
-        if (data.ErrorMessage || data.errorMessage || data.error) {
-          const errorMsg = data.ErrorMessage || data.errorMessage || data.error;
-          errorsContent.innerHTML += `<div class="error-content">Fra JSON: ${errorMsg}</div>`;
-          errorsBox.style.display = 'block';
-        }
-      }
-    } catch(e) {
-      console.error('Feil ved parsing av produkter:', e);
-    }
-    
-    detailsContent.innerHTML = headerHtml;
-    detailsBox.style.display = 'block';
-  }
 
-  // Parse og vis JSON
   const jsonStr = extractJSON(raw);
   if (!jsonStr) {
     errorsContent.innerHTML = '<div class="error-content">⚠️ Ingen gyldig JSON funnet i teksten.</div>';
@@ -714,6 +607,118 @@ function render(){
 
   try {
     const data = JSON.parse(jsonStr);
+
+    // Lagre data globalt for logg-generering
+    window.currentOrderData = data;
+    window.currentEmailHeader = emailHeader;
+
+    // Vis logg-generator
+    logGen.style.display = 'block';
+    generateLog(); // Generer initial logg
+
+    // Sjekk for feilmeldinger i JSON også
+    if (data.ErrorMessage || data.errorMessage || data.error) {
+      const errorMsg = data.ErrorMessage || data.errorMessage || data.error;
+      errorsContent.innerHTML += `<div class="error-content">Fra JSON: ${errorMsg}</div>`;
+      errorsBox.style.display = 'block';
+    }
+
+    /* --- Bygg header- og produktdetaljer --- */
+    const detailsSections = [];
+
+    if (Object.keys(emailHeader).length > 0) {
+      let headerHtml = '';
+
+      if (emailHeader.businessUnit) {
+        headerHtml += `<div><strong>Business Unit:</strong> ${emailHeader.businessUnit}</div>`;
+      }
+      if (emailHeader.externalReference) {
+        headerHtml += `<div><strong>Kundenummer:</strong> <span style="color: var(--accent); font-weight: bold; font-size: 1.1em;">${emailHeader.externalReference}</span>
+        <span class="tooltip">
+          <span style="cursor: help;">ℹ️</span>
+          <span class="tooltiptext">Dette er kundens unike ID</span>
+        </span>
+      </div>`;
+      }
+      if (emailHeader.product) {
+        headerHtml += `<div><strong>Produkt (fra header):</strong> ${emailHeader.product}</div>`;
+      }
+      if (emailHeader.offer) {
+        headerHtml += `<div><strong>Tilbud (fra header):</strong> ${emailHeader.offer}</div>`;
+      }
+      if (emailHeader.contractPeriod) {
+        headerHtml += `<div><strong>Kontraktsperiode:</strong> ${emailHeader.contractPeriod}</div>`;
+      }
+
+      if (headerHtml) {
+        detailsSections.push(headerHtml);
+      }
+    }
+
+    const status = data.Status || data.status;
+    if (status) {
+      const statusMargin = detailsSections.length > 0 ? '1rem' : '0';
+      let statusHtml = `<div style="margin-top: ${statusMargin};">`;
+      if (typeof status === 'string' && (status.toLowerCase() === 'success' || status.toLowerCase() === 'ok')) {
+        statusHtml += `<span class="status-badge status-success">✅ ${status}</span>`;
+      } else {
+        statusHtml += `<span class="status-badge status-error">❌ ${status}</span>`;
+      }
+      statusHtml += `</div>`;
+      detailsSections.push(statusHtml);
+    }
+
+    try {
+      const products = getByPath(data, 'ProductWithOffers');
+
+      if (products && Array.isArray(products) && products.length > 0) {
+        const productMargin = detailsSections.length > 0 ? '1rem' : '0';
+        let productHtml = `<div style="margin-top: ${productMargin};"><strong>📦 Alle produkter i bestillingen:</strong>`;
+        productHtml += `<div style="font-size: 0.9em; color: var(--text); opacity: 0.7;">(${products.length} produkt${products.length > 1 ? 'er' : ''})</div>`;
+        productHtml += '<div class="product-list">';
+
+        products.forEach(product => {
+          productHtml += '<div class="product-item">';
+          productHtml += `<div class="product-name">📌 ${product.ProductName || 'Ukjent produkt'}</div>`;
+
+          // Vis produktdetaljer
+          if (product.ProductKey) {
+            productHtml += `<div class="product-detail">Nøkkel: <code>${product.ProductKey}</code></div>`;
+          }
+
+          // Vis pris hvis den finnes
+          if (product.Price !== undefined) {
+            productHtml += `<div class="product-detail">💰 Pris: ${product.Price} ${product.Currency || 'NOK'}</div>`;
+          }
+
+          // Vis tilbud hvis de finnes
+          if (product.Offers && Array.isArray(product.Offers) && product.Offers.length > 0) {
+            productHtml += '<div class="product-detail" style="margin-top: 0.5rem;"><strong>Tilbud:</strong></div>';
+            product.Offers.forEach(offer => {
+              if (offer.OfferName || offer.OfferKey) {
+                productHtml += `<div class="product-detail" style="margin-left: 1rem;">
+                  🎁 ${offer.OfferName || 'Ukjent tilbud'}
+                  ${offer.OfferKey ? `<code>[${offer.OfferKey}]</code>` : ''}
+                  ${offer.Price ? ` - ${offer.Price} ${offer.Currency || 'NOK'}` : ''}
+                </div>`;
+              }
+            });
+          }
+
+          productHtml += '</div>';
+        });
+
+        productHtml += '</div></div>';
+        detailsSections.push(productHtml);
+      }
+    } catch(e) {
+      console.error('Feil ved parsing av produkter:', e);
+    }
+
+    if (detailsSections.length > 0) {
+      detailsContent.innerHTML = detailsSections.join('');
+      detailsBox.style.display = 'block';
+    }
 
     /* --- Bygg sammendraget --- */
     let found = false;
@@ -734,7 +739,7 @@ function render(){
             displayVal = d.toLocaleDateString('no-NO');
           }
         }
-        
+
         // Fremhev viktige felter
         const isImportant = ['ExternalReference', 'OrderId'].includes(origKey);
 
@@ -742,7 +747,7 @@ function render(){
           'beforeend',
           `<div class="row">
              <span class="key">${KEY_I18N[origKey] || origKey}:</span>
-             <span class="val ${FIELD_COLOR[origKey] || ''}" 
+             <span class="val ${FIELD_COLOR[origKey] || ''}"
                    ${isImportant ? 'style="font-weight: bold; font-size: 1.1em;"' : ''}>
                ${displayVal}
              </span>
