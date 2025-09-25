@@ -289,9 +289,9 @@ button{
 <div class="button-group">
   <button onclick="render()" class="btnSquare" title="Vis data">👁️</button>
   <button onclick="clearAll()" class="btnSquare" title="Tøm alt">🗑️</button>
-  <button onclick="copyJSON()" class="btnSquare" title="Kopier JSON">📋</button>
+  <button id="copyJsonBtn" onclick="copyJSON(event)" class="btnSquare" title="Kopier JSON">📋</button>
   <button onclick="formatJSON()" class="btnSquare" title="Formater JSON">✨</button>
-  <button onclick="copyPhone()" class="btnSquare" title="Kopier telefonnummer">📞</button>
+  <button id="copyPhoneBtn" onclick="copyPhone(event)" class="btnSquare" title="Kopier telefonnummer">📞</button>
   <button id="themeToggle" onclick="toggleTheme()" class="btnSquare" title="Bytt tema">🌙</button>
 </div>
 
@@ -360,7 +360,7 @@ button{
       ">//IPTV PRIO - Venter på data...</div>
     </div>
     
-    <button onclick="copyLog()" style="
+    <button id="copyLogBtn" onclick="copyLog(event)" style="
       padding: 0.5rem 1rem;
       background: var(--border);
       color: white;
@@ -526,22 +526,27 @@ function formatJSON() {
 }
 
 /* Kopier JSON til clipboard */
-function copyJSON() {
+function copyJSON(evt) {
   const jsonStr = extractJSON(document.getElementById('input').value);
-  
+
   if (!jsonStr) {
     alert('Ingen JSON å kopiere!');
     return;
   }
-  
+
   navigator.clipboard.writeText(jsonStr).then(() => {
     // Vis visuell tilbakemelding
-    const btn = event.target;
-    const originalText = btn.textContent;
-    btn.textContent = '✅';
-    setTimeout(() => {
-      btn.textContent = originalText;
-    }, 1500);
+    const fallbackBtn = document.getElementById('copyJsonBtn');
+    const btn = evt?.currentTarget ?? evt?.target;
+    const buttonEl = btn instanceof HTMLElement ? btn : fallbackBtn;
+
+    if (buttonEl instanceof HTMLElement) {
+      const originalText = buttonEl.textContent;
+      buttonEl.textContent = '✅';
+      setTimeout(() => {
+        buttonEl.textContent = originalText;
+      }, 1500);
+    }
   }).catch(() => {
     alert('Kunne ikke kopiere til utklippstavlen');
   });
@@ -768,7 +773,7 @@ function render(){
   }
 }
 
-function copyPhone() {
+function copyPhone(evt) {
   if (!window.currentOrderData) {
     alert('Ingen data å hente telefonnummer fra!');
     return;
@@ -781,15 +786,20 @@ function copyPhone() {
     alert('Ingen telefonnummer funnet i dataene!');
     return;
   }
-  
+
   navigator.clipboard.writeText(phone).then(() => {
     // Vis visuell tilbakemelding
-    const btn = event.target;
-    const originalText = btn.textContent;
-    btn.textContent = '✅';
-    setTimeout(() => {
-      btn.textContent = originalText;
-    }, 1500);
+    const fallbackBtn = document.getElementById('copyPhoneBtn');
+    const btn = evt?.currentTarget ?? evt?.target;
+    const buttonEl = btn instanceof HTMLElement ? btn : fallbackBtn;
+
+    if (buttonEl instanceof HTMLElement) {
+      const originalText = buttonEl.textContent;
+      buttonEl.textContent = '✅';
+      setTimeout(() => {
+        buttonEl.textContent = originalText;
+      }, 1500);
+    }
   }).catch(() => {
     alert('Kunne ikke kopiere til utklippstavlen');
   });
@@ -865,27 +875,44 @@ function generateLog() {
   document.getElementById('generatedLog').textContent = logText;
 }
 
-function copyLog() {
+function copyLog(evt) {
   const logText = document.getElementById('generatedLog').textContent;
-  
+
   if (logText.includes('Venter på data')) {
     alert('Ingen logg å kopiere ennå!');
     return;
   }
-  
+
   navigator.clipboard.writeText(logText).then(() => {
     // Vis visuell tilbakemelding
-    const btn = event.target;
-    const originalText = btn.innerHTML;
-    btn.innerHTML = '✅ Kopiert!';
-    btn.style.background = 'var(--success)';
-    setTimeout(() => {
-      btn.innerHTML = originalText;
-      btn.style.background = 'var(--border)';
-    }, 2000);
+    const fallbackBtn = document.getElementById('copyLogBtn');
+    const btn = evt?.currentTarget ?? evt?.target;
+    const buttonEl = btn instanceof HTMLElement ? btn : fallbackBtn;
+
+    if (buttonEl instanceof HTMLElement) {
+      const originalText = buttonEl.innerHTML;
+      const originalBackground = buttonEl.style.background;
+      const originalColor = buttonEl.style.color;
+      buttonEl.innerHTML = '✅ Kopiert!';
+      buttonEl.style.background = 'var(--success)';
+      buttonEl.style.color = 'var(--bg)';
+      setTimeout(() => {
+        buttonEl.innerHTML = originalText;
+        buttonEl.style.background = originalBackground;
+        buttonEl.style.color = originalColor;
+      }, 2000);
+    }
   }).catch(() => {
     alert('Kunne ikke kopiere til utklippstavlen');
   });
+}
+
+function createSyntheticButtonEvent(buttonId) {
+  const btn = document.getElementById(buttonId);
+  if (btn instanceof HTMLElement) {
+    return { currentTarget: btn, target: btn };
+  }
+  return undefined;
 }
 
 // Lytt til endringer i feltene
@@ -914,13 +941,13 @@ document.addEventListener('keydown', function(e) {
   // Ctrl/Cmd + Shift + C = Kopier
   if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'C') {
     e.preventDefault();
-    copyJSON();
+    copyJSON(createSyntheticButtonEvent('copyJsonBtn'));
   }
   // Ctrl/Cmd + L = Kopier logg
   if ((e.ctrlKey || e.metaKey) && e.key === 'l') {
     e.preventDefault();
     if (document.getElementById('logGenerator').style.display !== 'none') {
-      copyLog();
+      copyLog(createSyntheticButtonEvent('copyLogBtn'));
     }
   }
 });
