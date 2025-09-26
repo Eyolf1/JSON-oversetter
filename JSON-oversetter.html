@@ -476,25 +476,6 @@ function extractJSONBlocks(str){
   return blocks;
 }
 
-function pickBestJSONBlock(blocks){
-  if (!blocks || blocks.length === 0) return null;
-  if (blocks.length === 1) return blocks[0];
-
-  const hasImportantSignal = str => {
-    let score = 0;
-    if (/"Customer"\s*:/.test(str)) score += 5000;
-    if (/"Order"\s*:/.test(str)) score += 1000;
-    if (/"Product"\s*:/.test(str)) score += 500;
-    return score;
-  };
-
-  return blocks.reduce((best, current) => {
-    const bestScore = hasImportantSignal(best) + best.length;
-    const currentScore = hasImportantSignal(current) + current.length;
-    return currentScore > bestScore ? current : best;
-  });
-}
-
 /* ------------------------------------------ */
 
 /* Hent verdi gitt en sti "Customer.BirthDate" */
@@ -579,7 +560,7 @@ function parseEmailHeader(str) {
 function formatJSON() {
   const input = document.getElementById('input');
   const blocks = extractJSONBlocks(input.value);
-  const jsonStr = pickBestJSONBlock(blocks);
+  const jsonStr = blocks.length ? blocks[0] : null;
   if (!jsonStr) {
     alert('Ingen gyldig JSON funnet!');
     return;
@@ -596,7 +577,7 @@ function formatJSON() {
 /* Kopier JSON til clipboard */
 function copyJSON(evt) {
   const blocks = extractJSONBlocks(document.getElementById('input').value);
-  const jsonStr = pickBestJSONBlock(blocks);
+  const jsonStr = blocks.length ? blocks[0] : null;
 
   if (!jsonStr) {
     alert('Ingen JSON å kopiere!');
@@ -677,7 +658,7 @@ function render(){
   }
 
   const blocks = extractJSONBlocks(raw);
-  const jsonStr = pickBestJSONBlock(blocks);
+  const jsonStr = blocks.length ? blocks[0] : null;
   if (!jsonStr) {
     errorsContent.innerHTML = '<div class="error-content">⚠️ Ingen gyldig JSON funnet i teksten.</div>';
     errorsBox.style.display = 'block';
