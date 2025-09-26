@@ -833,14 +833,24 @@ function generateLog() {
   const externalRef = getByPath(data, 'Customer.ExternalReference') || header.externalReference || 'UKJENT';
   
   // Hent produkter
-  const products = getByPath(data, 'ProductWithOffers') || [];
-  let productList = products.map(p => p.ProductName || 'Ukjent produkt').join(', ');
-  if (!productList) productList = 'Ingen produkter';
+  const productData = getByPath(data, 'ProductWithOffers');
+  const products = Array.isArray(productData) ? productData : [];
+  const productNames = products
+    .map(product => (product?.ProductName ?? '').trim())
+    .filter(Boolean);
+  const knownProductNames = productNames.filter(
+    name => name.toLowerCase() !== 'ukjent produkt'
+  );
+  const hasKnownProducts = knownProductNames.length > 0;
   
   // Bygg logg-tekst
   let logText = `//IPTV PRIO\n`;
   logText += `Kunde: ${externalRef}\n`;
-  logText += `Produkter: ${productList}\n`;
+  if (hasKnownProducts) {
+    logText += `Produkter: ${knownProductNames.join(', ')}\n`;
+  } else if (!products.length || productNames.length === 0) {
+    logText += `Produkter: Ingen produkter\n`;
+  }
   
   // Legg til produkt fra header hvis det finnes
   if (header.product) {
