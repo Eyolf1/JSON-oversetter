@@ -420,6 +420,62 @@ const SUMMARY_PATHS=[
   ["OrderId","OrderId"]
 ];
 
+/* ----------  SIKKERHET & HJELPERE  ---------- */
+function esc(s){
+  return String(s)
+    .replace(/&/g,"&amp;")
+    .replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;")
+    .replace(/'/g,"&#39;");
+}
+
+function copyTextFallback(text){
+  const ta=document.createElement('textarea');
+  ta.value=text;
+  ta.style.position='fixed';
+  ta.style.opacity='0';
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand('copy'); }
+  finally { document.body.removeChild(ta); }
+}
+
+function parseDateSafe(v){
+  if (!v) return null;
+  const d = /^\d{4}-\d{2}-\d{2}/.test(v) ? new Date(v+"T00:00:00") : new Date(v);
+  return isNaN(d) ? null : d;
+}
+
+/* Finn én eller flere JSON-blokker ({} eller []) i rå tekst */
+function extractJSONBlocks(str){
+  const blocks = [];
+  const openers = ['{','['];
+  const closers = {'{':'}','[':']'};
+  for (let i=0;i<str.length;i++){
+    if (!openers.includes(str[i])) continue;
+    const start = i, opener = str[i], closer = closers[opener];
+    let depth = 0, inStr = false, escNext=false;
+    for (let j=i;j<str.length;j++){
+      const ch = str[j];
+      if (inStr){
+        if (escNext){ escNext=false; continue; }
+        if (ch === '\\'){ escNext=true; }
+        else if (ch === '"'){ inStr=false; }
+      } else {
+        if (ch === '"'){ inStr=true; }
+        else if (ch === opener){ depth++; }
+        else if (ch === closer){ depth--; }
+      }
+      if (depth === 0){
+        const cand = str.slice(start, j+1);
+        try { JSON.parse(cand); blocks.push(cand); i = j; break; } catch {}
+      }
+    }
+  }
+  return blocks;
+}
+
 /* ------------------------------------------ */
 
 /* Hent verdi gitt en sti "Customer.BirthDate" */
@@ -437,12 +493,13 @@ function htmlFor(v, indent = 0){
     const entries = Object.entries(v);
     if (entries.length === 0) return '<span style="color: #999">{}</span>';
     return '<div class="obj">{' + entries.map(
-      ([k,val]) => `<div><span class="key">${KEY_I18N[k] || k}</span>: ${htmlFor(val, indent + 1)}</div>`
+      ([k,val]) => `<div><span class="key">${esc(KEY_I18N[k] || k)}</span>: ${htmlFor(val, indent + 1)}</div>`
     ).join('') + '}</div>';
   }
   if (v === null) return '<span style="color: #999">null</span>';
   if (v === undefined) return '<span style="color: #999">undefined</span>';
   if (typeof v === 'string' && v === '') return '<span style="color: #999">""</span>';
+  if (typeof v === 'string') return `<span>${esc(v)}</span>`;
   return `<span>${String(v)}</span>`;
 }
 
@@ -510,15 +567,14 @@ function parseEmailHeader(str) {
 /* Format JSON pent */
 function formatJSON() {
   const input = document.getElementById('input');
-  const jsonStr = extractJSON(input.value);
-  
-  if (!jsonStr) {
+  const blocks = extractJSONBlocks(input.value);
+  if (!blocks.length) {
     alert('Ingen gyldig JSON funnet!');
     return;
   }
-  
+
   try {
-    const data = JSON.parse(jsonStr);
+    const data = JSON.parse(blocks[0]);
     input.value = JSON.stringify(data, null, 2);
   } catch(e) {
     alert('Kunne ikke formatere JSON: ' + e.message);
@@ -527,7 +583,8 @@ function formatJSON() {
 
 /* Kopier JSON til clipboard */
 function copyJSON(evt) {
-  const jsonStr = extractJSON(document.getElementById('input').value);
+  const blocks = extractJSONBlocks(document.getElementById('input').value);
+  const jsonStr = blocks && blocks.length ? blocks[0] : null;
 
   if (!jsonStr) {
     alert('Ingen JSON å kopiere!');
@@ -548,7 +605,11 @@ function copyJSON(evt) {
       }, 1500);
     }
   }).catch(() => {
-    alert('Kunne ikke kopiere til utklippstavlen');
+    try {
+      copyTextFallback(jsonStr);
+    } catch {
+      alert('Kunne ikke kopiere til utklippstavlen');
+    }
   });
 }
 
@@ -598,20 +659,20 @@ function render(){
 
   // Vis feilmeldinger separat hvis de finnes
   if (emailHeader.errors) {
-    errorsContent.innerHTML = `<div class="error-content">${emailHeader.errors}</div>`;
+    errorsContent.innerHTML = `<div class="error-content">${esc(emailHeader.errors)}</div>`;
     errorsBox.style.display = 'block';
     delete emailHeader.errors; // Fjern fra header for å ikke vise dobbelt
   }
 
-  const jsonStr = extractJSON(raw);
-  if (!jsonStr) {
+  const blocks = extractJSONBlocks(raw);
+  if (!blocks.length) {
     errorsContent.innerHTML = '<div class="error-content">⚠️ Ingen gyldig JSON funnet i teksten.</div>';
     errorsBox.style.display = 'block';
     return;
   }
 
   try {
-    const data = JSON.parse(jsonStr);
+    const data = JSON.parse(blocks[0]);
 
     // Lagre data globalt for logg-generering
     window.currentOrderData = data;
@@ -624,7 +685,7 @@ function render(){
     // Sjekk for feilmeldinger i JSON også
     if (data.ErrorMessage || data.errorMessage || data.error) {
       const errorMsg = data.ErrorMessage || data.errorMessage || data.error;
-      errorsContent.innerHTML += `<div class="error-content">Fra JSON: ${errorMsg}</div>`;
+      errorsContent.innerHTML += `<div class="error-content">Fra JSON: ${esc(String(errorMsg))}</div>`;
       errorsBox.style.display = 'block';
     }
 
@@ -635,10 +696,10 @@ function render(){
       let headerHtml = '';
 
       if (emailHeader.businessUnit) {
-        headerHtml += `<div><strong>Business Unit:</strong> ${emailHeader.businessUnit}</div>`;
+        headerHtml += `<div><strong>Business Unit:</strong> ${esc(emailHeader.businessUnit)}</div>`;
       }
       if (emailHeader.externalReference) {
-        headerHtml += `<div><strong>Kundenummer:</strong> <span style="color: var(--accent); font-weight: bold; font-size: 1.1em;">${emailHeader.externalReference}</span>
+        headerHtml += `<div><strong>Kundenummer:</strong> <span style="color: var(--accent); font-weight: bold; font-size: 1.1em;">${esc(emailHeader.externalReference)}</span>
         <span class="tooltip">
           <span style="cursor: help;">ℹ️</span>
           <span class="tooltiptext">Dette er kundens unike ID</span>
@@ -646,13 +707,13 @@ function render(){
       </div>`;
       }
       if (emailHeader.product) {
-        headerHtml += `<div><strong>Produkt (fra header):</strong> ${emailHeader.product}</div>`;
+        headerHtml += `<div><strong>Produkt (fra header):</strong> ${esc(emailHeader.product)}</div>`;
       }
       if (emailHeader.offer) {
-        headerHtml += `<div><strong>Tilbud (fra header):</strong> ${emailHeader.offer}</div>`;
+        headerHtml += `<div><strong>Tilbud (fra header):</strong> ${esc(emailHeader.offer)}</div>`;
       }
       if (emailHeader.contractPeriod) {
-        headerHtml += `<div><strong>Kontraktsperiode:</strong> ${emailHeader.contractPeriod}</div>`;
+        headerHtml += `<div><strong>Kontraktsperiode:</strong> ${esc(emailHeader.contractPeriod)}</div>`;
       }
 
       if (headerHtml) {
@@ -665,9 +726,9 @@ function render(){
       const statusMargin = detailsSections.length > 0 ? '1rem' : '0';
       let statusHtml = `<div style="margin-top: ${statusMargin};">`;
       if (typeof status === 'string' && (status.toLowerCase() === 'success' || status.toLowerCase() === 'ok')) {
-        statusHtml += `<span class="status-badge status-success">✅ ${status}</span>`;
+        statusHtml += `<span class="status-badge status-success">✅ ${esc(status)}</span>`;
       } else {
-        statusHtml += `<span class="status-badge status-error">❌ ${status}</span>`;
+        statusHtml += `<span class="status-badge status-error">❌ ${esc(String(status))}</span>`;
       }
       statusHtml += `</div>`;
       detailsSections.push(statusHtml);
@@ -684,16 +745,16 @@ function render(){
 
         products.forEach(product => {
           productHtml += '<div class="product-item">';
-          productHtml += `<div class="product-name">📌 ${product.ProductName || 'Ukjent produkt'}</div>`;
+          productHtml += `<div class="product-name">📌 ${esc(product.ProductName || 'Ukjent produkt')}</div>`;
 
           // Vis produktdetaljer
           if (product.ProductKey) {
-            productHtml += `<div class="product-detail">Nøkkel: <code>${product.ProductKey}</code></div>`;
+            productHtml += `<div class="product-detail">Nøkkel: <code>${esc(product.ProductKey)}</code></div>`;
           }
 
           // Vis pris hvis den finnes
           if (product.Price !== undefined) {
-            productHtml += `<div class="product-detail">💰 Pris: ${product.Price} ${product.Currency || 'NOK'}</div>`;
+            productHtml += `<div class="product-detail">💰 Pris: ${esc(String(product.Price))} ${esc(product.Currency || 'NOK')}</div>`;
           }
 
           // Vis tilbud hvis de finnes
@@ -702,9 +763,9 @@ function render(){
             product.Offers.forEach(offer => {
               if (offer.OfferName || offer.OfferKey) {
                 productHtml += `<div class="product-detail" style="margin-left: 1rem;">
-                  🎁 ${offer.OfferName || 'Ukjent tilbud'}
-                  ${offer.OfferKey ? `<code>[${offer.OfferKey}]</code>` : ''}
-                  ${offer.Price ? ` - ${offer.Price} ${offer.Currency || 'NOK'}` : ''}
+                  🎁 ${esc(offer.OfferName || 'Ukjent tilbud')}
+                  ${offer.OfferKey ? `<code>[${esc(offer.OfferKey)}]</code>` : ''}
+                  ${offer.Price ? ` - ${esc(String(offer.Price))} ${esc(offer.Currency || 'NOK')}` : ''}
                 </div>`;
               }
             });
@@ -739,8 +800,8 @@ function render(){
 
         // Formatér fødselsdato
         if (origKey === 'BirthDate' || origKey === 'ActivationDate') {
-          const d = new Date(val);
-          if (!isNaN(d)) {
+          const d = parseDateSafe(val);
+          if (d) {
             displayVal = d.toLocaleDateString('no-NO');
           }
         }
@@ -751,10 +812,10 @@ function render(){
         rows.insertAdjacentHTML(
           'beforeend',
           `<div class="row">
-             <span class="key">${KEY_I18N[origKey] || origKey}:</span>
+             <span class="key">${esc(KEY_I18N[origKey] || origKey)}:</span>
              <span class="val ${FIELD_COLOR[origKey] || ''}"
                    ${isImportant ? 'style="font-weight: bold; font-size: 1.1em;"' : ''}>
-               ${displayVal}
+               ${esc(String(displayVal))}
              </span>
            </div>`
         );
@@ -768,7 +829,7 @@ function render(){
     out.style.display = 'block';
 
   } catch(e) {
-    errorsContent.innerHTML = `<div class="error-content">❌ Kunne ikke tolke JSON: ${e.message}</div>`;
+    errorsContent.innerHTML = `<div class="error-content">❌ Kunne ikke tolke JSON: ${esc(e.message)}</div>`;
     errorsBox.style.display = 'block';
   }
 }
@@ -801,7 +862,11 @@ function copyPhone(evt) {
       }, 1500);
     }
   }).catch(() => {
-    alert('Kunne ikke kopiere til utklippstavlen');
+    try {
+      copyTextFallback(phone);
+    } catch {
+      alert('Kunne ikke kopiere til utklippstavlen');
+    }
   });
 }
 
@@ -913,7 +978,11 @@ function copyLog(evt) {
       }, 2000);
     }
   }).catch(() => {
-    alert('Kunne ikke kopiere til utklippstavlen');
+    try {
+      copyTextFallback(logText);
+    } catch {
+      alert('Kunne ikke kopiere til utklippstavlen');
+    }
   });
 }
 
@@ -948,13 +1017,13 @@ document.addEventListener('keydown', function(e) {
     e.preventDefault();
     formatJSON();
   }
-  // Ctrl/Cmd + Shift + C = Kopier
+  // Ctrl/Cmd + Shift + C = Kopier JSON
   if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'C') {
     e.preventDefault();
     copyJSON(createSyntheticButtonEvent('copyJsonBtn'));
   }
-  // Ctrl/Cmd + L = Kopier logg
-  if ((e.ctrlKey || e.metaKey) && e.key === 'l') {
+  // Ctrl/Cmd + Shift + L = Kopier logg (unngå konflikt med nettleserens adresselinje)
+  if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'l') {
     e.preventDefault();
     if (document.getElementById('logGenerator').style.display !== 'none') {
       copyLog(createSyntheticButtonEvent('copyLogBtn'));
