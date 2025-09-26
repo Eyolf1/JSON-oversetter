@@ -584,7 +584,7 @@ function formatJSON() {
 /* Kopier JSON til clipboard */
 function copyJSON(evt) {
   const blocks = extractJSONBlocks(document.getElementById('input').value);
-  const jsonStr = blocks[0];
+  const jsonStr = blocks && blocks.length ? blocks[0] : null;
 
   if (!jsonStr) {
     alert('Ingen JSON å kopiere!');
