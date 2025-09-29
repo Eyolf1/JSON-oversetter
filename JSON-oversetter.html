@@ -476,6 +476,79 @@ function extractJSONBlocks(str){
   return blocks;
 }
 
+const EXPECTED_JSON_FIELDS = {
+  root: ['Customer','OrderId','CartOptions','ProductWithOffers','Status','ErrorMessage','Errors','ErrorMessages'],
+  paths: [
+    ['Customer','DefaultAddress'],
+    ['Customer','DefaultAddress','FirstName'],
+    ['Customer','DefaultAddress','Surname'],
+    ['Customer','DefaultAddress','Email'],
+    ['Customer','DefaultAddress','MobilePhone'],
+    ['Customer','DefaultAddress','Street'],
+    ['Customer','DefaultAddress','PostalCode'],
+    ['Customer','DefaultAddress','BigCity'],
+    ['Customer','DefaultAddress','SmallCity'],
+    ['CartOptions','ActivationDate'],
+    ['CartOptions','DeliveryDate'],
+    ['ProductWithOffers']
+  ]
+};
+
+function hasPath(obj, path){
+  let cur = obj;
+  for (const key of path){
+    if (!cur || typeof cur !== 'object') return false;
+    cur = cur[key];
+  }
+  return cur !== undefined;
+}
+
+function scoreJSONCandidate(candidate){
+  if (!candidate || typeof candidate !== 'object') return 0;
+  if (Array.isArray(candidate)){
+    return candidate.reduce((best, item) => Math.max(best, scoreJSONCandidate(item)), 0);
+  }
+
+  let score = 0;
+  for (const key of EXPECTED_JSON_FIELDS.root){
+    if (Object.prototype.hasOwnProperty.call(candidate, key)) score += 2;
+  }
+  for (const path of EXPECTED_JSON_FIELDS.paths){
+    if (hasPath(candidate, path)) score += 1;
+  }
+  if (Array.isArray(candidate.ProductWithOffers) && candidate.ProductWithOffers.length) {
+    score += 2;
+  }
+  return score;
+}
+
+function pickBestJSONBlock(blocks){
+  if (!Array.isArray(blocks) || !blocks.length) return null;
+
+  let bestBlock = null;
+  let bestScore = -1;
+  let fallback = null;
+
+  for (const block of blocks){
+    let parsed;
+    try {
+      parsed = JSON.parse(block);
+    } catch {
+      continue;
+    }
+
+    if (fallback === null) fallback = block;
+
+    const score = scoreJSONCandidate(parsed);
+    if (score > bestScore){
+      bestScore = score;
+      bestBlock = block;
+    }
+  }
+
+  return bestBlock ?? fallback;
+}
+
 /* ------------------------------------------ */
 
 /* Hent verdi gitt en sti "Customer.BirthDate" */
@@ -574,7 +647,12 @@ function formatJSON() {
   }
 
   try {
-    const data = JSON.parse(blocks[0]);
+    const bestBlock = pickBestJSONBlock(blocks);
+    if (!bestBlock) {
+      alert('Ingen gyldig JSON funnet!');
+      return;
+    }
+    const data = JSON.parse(bestBlock);
     input.value = JSON.stringify(data, null, 2);
   } catch(e) {
     alert('Kunne ikke formatere JSON: ' + e.message);
@@ -584,7 +662,7 @@ function formatJSON() {
 /* Kopier JSON til clipboard */
 function copyJSON(evt) {
   const blocks = extractJSONBlocks(document.getElementById('input').value);
-  const jsonStr = blocks && blocks.length ? blocks[0] : null;
+  const jsonStr = pickBestJSONBlock(blocks);
 
   if (!jsonStr) {
     alert('Ingen JSON å kopiere!');
@@ -672,7 +750,13 @@ function render(){
   }
 
   try {
-    const data = JSON.parse(blocks[0]);
+    const jsonStr = pickBestJSONBlock(blocks);
+    if (!jsonStr) {
+      errorsContent.innerHTML = '<div class="error-content">⚠️ Fant JSON-blokk, men kunne ikke tolke den.</div>';
+      errorsBox.style.display = 'block';
+      return;
+    }
+    const data = JSON.parse(jsonStr);
 
     // Lagre data globalt for logg-generering
     window.currentOrderData = data;
