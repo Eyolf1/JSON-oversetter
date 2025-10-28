@@ -577,14 +577,6 @@ function htmlFor(v, indent = 0){
 }
 
 /* ----------  HJELPEFUNKSJONER  ---------- */
-function extractJSON(str){
-  const first = str.indexOf('{');
-  const last  = str.lastIndexOf('}');
-  if (first === -1 || last === -1 || last <= first) return null;
-  const cand = str.slice(first, last + 1);
-  try { JSON.parse(cand); return cand; } catch{ return null; }
-}
-
 function parseEmailHeader(str) {
   const lines = str.split('\n');
   const headerInfo = {};
